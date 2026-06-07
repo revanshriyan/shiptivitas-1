@@ -15,12 +15,8 @@ export default class Board extends React.Component {
         complete: clients.filter(client => client.status && client.status === 'complete'),
       }
     }
-    this.swimlanes = {
-      backlog: React.createRef(),
-      inProgress: React.createRef(),
-      complete: React.createRef(),
-    }
   }
+
   getClients() {
     return [
       ['1','Stark, White and Abbott','Cloned Optimal Architecture', 'in-progress'],
@@ -50,9 +46,63 @@ export default class Board extends React.Component {
       status: companyDetails[3],
     }));
   }
-  renderSwimlane(name, clients, ref) {
+
+  componentDidMount() {
+    const containers = [
+      document.querySelector('[data-status="backlog"]'),
+      document.querySelector('[data-status="in-progress"]'),
+      document.querySelector('[data-status="complete"]')
+    ].filter(el => el !== null);
+
+    if (containers.length === 3) {
+      this.drake = Dragula(containers);
+
+      this.drake.on('drop', (el, target, source, sibling) => {
+        // CRITICAL FIX: Cancel the DOM manipulation so React can handle it
+        this.drake.cancel(true);
+        
+        const newStatus = target.getAttribute('data-status');
+        const cardId = el.getAttribute('data-id');
+
+        this.setState(prevState => {
+          const allClients = [
+            ...prevState.clients.backlog,
+            ...prevState.clients.inProgress,
+            ...prevState.clients.complete
+          ];
+
+          const updatedClients = allClients.map(client => {
+            if (client.id === cardId) {
+              return { ...client, status: newStatus };
+            }
+            return client;
+          });
+
+          return {
+            clients: {
+              backlog: updatedClients.filter(client => !client.status || client.status === 'backlog'),
+              inProgress: updatedClients.filter(client => client.status === 'in-progress'),
+              complete: updatedClients.filter(client => client.status === 'complete'),
+            }
+          };
+        });
+      });
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.drake) {
+      this.drake.destroy();
+    }
+  }
+
+  renderSwimlane(name, clients, status) {
     return (
-      <Swimlane name={name} clients={clients} dragulaRef={ref}/>
+      <Swimlane 
+        name={name} 
+        clients={clients} 
+        status={status}
+      />
     );
   }
 
@@ -62,13 +112,13 @@ export default class Board extends React.Component {
         <div className="container-fluid">
           <div className="row">
             <div className="col-md-4">
-              {this.renderSwimlane('Backlog', this.state.clients.backlog, this.swimlanes.backlog)}
+              {this.renderSwimlane('Backlog', this.state.clients.backlog, 'backlog')}
             </div>
             <div className="col-md-4">
-              {this.renderSwimlane('In Progress', this.state.clients.inProgress, this.swimlanes.inProgress)}
+              {this.renderSwimlane('In Progress', this.state.clients.inProgress, 'in-progress')}
             </div>
             <div className="col-md-4">
-              {this.renderSwimlane('Complete', this.state.clients.complete, this.swimlanes.complete)}
+              {this.renderSwimlane('Complete', this.state.clients.complete, 'complete')}
             </div>
           </div>
         </div>
