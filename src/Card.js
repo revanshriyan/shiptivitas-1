@@ -3,17 +3,17 @@ import './Card.css';
 
 export default class Card extends React.Component {
   render() {
-    let className = ['Card'];
-    if (this.props.status === 'backlog') {
-      className.push('Card-grey');
-    } else if (this.props.status === 'in-progress') {
-      className.push('Card-blue');
+    let colorClass = 'Card-grey';
+    if (this.props.status === 'in-progress') {
+      colorClass = 'Card-blue';
     } else if (this.props.status === 'complete') {
-      className.push('Card-green');
+      colorClass = 'Card-green';
     }
+
     return (
-      <div className={className.join(' ')} data-id={this.props.id} data-status={this.props.status}>
+      <div className={`Card ${colorClass}`} data-id={this.props.id}>
         <div className="Card-title">{this.props.name}</div>
+        <div className="Card-description">{this.props.description}</div>
       </div>
     );
   }

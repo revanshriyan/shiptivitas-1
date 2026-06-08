@@ -4,90 +4,83 @@ import 'dragula/dist/dragula.css';
 import Swimlane from './Swimlane';
 import './Board.css';
 
+const API_URL = 'http://localhost:3001/api/v1';
+
 export default class Board extends React.Component {
   constructor(props) {
     super(props);
-    const clients = this.getClients();
     this.state = {
       clients: {
-        backlog: clients.filter(client => !client.status || client.status === 'backlog'),
-        inProgress: clients.filter(client => client.status && client.status === 'in-progress'),
-        complete: clients.filter(client => client.status && client.status === 'complete'),
+        backlog: [],
+        inProgress: [],
+        complete: [],
       }
     }
   }
 
-  getClients() {
-    return [
-      ['1','Stark, White and Abbott','Cloned Optimal Architecture', 'in-progress'],
-      ['2','Wiza LLC','Exclusive Bandwidth-Monitored Implementation', 'complete'],
-      ['3','Nolan LLC','Vision-Oriented 4Thgeneration Graphicaluserinterface', 'backlog'],
-      ['4','Thompson PLC','Streamlined Regional Knowledgeuser', 'in-progress'],
-      ['5','Walker-Williamson','Team-Oriented 6Thgeneration Matrix', 'in-progress'],
-      ['6','Boehm and Sons','Automated Systematic Paradigm', 'backlog'],
-      ['7','Runolfsson, Hegmann and Block','Integrated Transitional Strategy', 'backlog'],
-      ['8','Schumm-Labadie','Operative Heuristic Challenge', 'backlog'],
-      ['9','Kohler Group','Re-Contextualized Multi-Tasking Attitude', 'backlog'],
-      ['10','Romaguera Inc','Managed Foreground Toolset', 'backlog'],
-      ['11','Reilly-King','Future-Proofed Interactive Toolset', 'complete'],
-      ['12','Emard, Champlin and Runolfsdottir','Devolved Needs-Based Capability', 'backlog'],
-      ['13','Fritsch, Cronin and Wolff','Open-Source 3Rdgeneration Website', 'complete'],
-      ['14','Borer LLC','Profit-Focused Incremental Orchestration', 'backlog'],
-      ['15','Emmerich-Ankunding','User-Centric Stable Extranet', 'in-progress'],
-      ['16','Willms-Abbott','Progressive Bandwidth-Monitored Access', 'in-progress'],
-      ['17','Brekke PLC','Intuitive User-Facing Customerloyalty', 'complete'],
-      ['18','Bins, Toy and Klocko','Integrated Assymetric Software', 'backlog'],
-      ['19','Hodkiewicz-Hayes','Programmable Systematic Securedline', 'backlog'],
-      ['20','Murphy, Lang and Ferry','Organized Explicit Access', 'backlog'],
-    ].map(companyDetails => ({
-      id: companyDetails[0],
-      name: companyDetails[1],
-      description: companyDetails[2],
-      status: companyDetails[3],
-    }));
+  componentDidMount() {
+    // Fetch clients from backend on mount
+    this.fetchClients();
+
+    // Initialize Dragula after a short delay to ensure DOM is ready
+    setTimeout(() => {
+      this.initDragula();
+    }, 100);
   }
 
-  componentDidMount() {
+  fetchClients = () => {
+    fetch(`${API_URL}/clients`)
+      .then(res => res.json())
+      .then(clients => {
+        this.setState({
+          clients: {
+            backlog: clients.filter(c => c.status === 'backlog').sort((a, b) => a.priority - b.priority),
+            inProgress: clients.filter(c => c.status === 'in-progress').sort((a, b) => a.priority - b.priority),
+            complete: clients.filter(c => c.status === 'complete').sort((a, b) => a.priority - b.priority),
+          }
+        });
+      })
+      .catch(err => console.error('Error fetching clients:', err));
+  }
+
+  initDragula = () => {
     const containers = [
       document.querySelector('[data-status="backlog"]'),
       document.querySelector('[data-status="in-progress"]'),
       document.querySelector('[data-status="complete"]')
     ].filter(el => el !== null);
 
-    if (containers.length === 3) {
-      this.drake = Dragula(containers);
-
-      this.drake.on('drop', (el, target, source, sibling) => {
-        // CRITICAL FIX: Cancel the DOM manipulation so React can handle it
-        this.drake.cancel(true);
-        
-        const newStatus = target.getAttribute('data-status');
-        const cardId = el.getAttribute('data-id');
-
-        this.setState(prevState => {
-          const allClients = [
-            ...prevState.clients.backlog,
-            ...prevState.clients.inProgress,
-            ...prevState.clients.complete
-          ];
-
-          const updatedClients = allClients.map(client => {
-            if (client.id === cardId) {
-              return { ...client, status: newStatus };
-            }
-            return client;
-          });
-
-          return {
-            clients: {
-              backlog: updatedClients.filter(client => !client.status || client.status === 'backlog'),
-              inProgress: updatedClients.filter(client => client.status === 'in-progress'),
-              complete: updatedClients.filter(client => client.status === 'complete'),
-            }
-          };
-        });
-      });
+    if (containers.length !== 3) {
+      console.error('Could not find all swimlane containers');
+      return;
     }
+
+    this.drake = Dragula(containers);
+
+    this.drake.on('drop', (el, target, source, sibling) => {
+      // Cancel Dragula's DOM manipulation - let React handle it
+      this.drake.cancel(true);
+
+      const newStatus = target.getAttribute('data-status');
+      const cardId = el.getAttribute('data-id');
+
+      // Calculate new priority based on position in target swimlane
+      const targetCards = Array.from(target.children);
+      const newPriority = targetCards.indexOf(el) + 1;
+
+      // Call API to update backend
+      fetch(`${API_URL}/clients/${cardId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, priority: newPriority })
+      })
+      .then(res => res.json())
+      .then(() => {
+        // Re-fetch all clients from server to get updated state
+        this.fetchClients();
+      })
+      .catch(err => console.error('Error updating client:', err));
+    });
   }
 
   componentWillUnmount() {
